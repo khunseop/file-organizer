@@ -1,0 +1,228 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>규칙 편집</title>
+<style>
+:root{--bg:#f6f7f9;--card:#fff;--ink:#1c2230;--mute:#667085;--line:#e3e6ec;--accent:#2f5bea;--accent-ink:#fff;
+  --ok:#177a4b;--okbg:#e8f6ee;--warn:#b54708;--warnbg:#fff4e5;--err:#b42318;--errbg:#fdeceb;--chip:#eef1f7}
+@media(prefers-color-scheme:dark){:root{--bg:#14171d;--card:#1c2029;--ink:#e8ebf2;--mute:#9aa3b5;--line:#2c3240;
+  --accent:#7d9bff;--accent-ink:#10131a;--ok:#5ad19a;--okbg:#17332a;--warn:#f5b061;--warnbg:#3a2c18;
+  --err:#ff8a80;--errbg:#3a1d1b;--chip:#2a3040}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.5 system-ui,-apple-system,"Malgun Gothic","Apple SD Gothic Neo",sans-serif}
+header{position:sticky;top:0;z-index:2;background:var(--card);border-bottom:1px solid var(--line);padding:12px 20px;display:flex;gap:16px;align-items:center;flex-wrap:wrap}
+header h1{font-size:20px;margin:0}
+header .paths{color:var(--mute);font-size:12px;flex:1;min-width:200px}
+button{font:inherit;border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:6px;padding:5px 10px;cursor:pointer}
+button:hover{border-color:var(--accent)}
+button.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent);font-weight:600;padding:6px 16px}
+button:disabled{opacity:.5;cursor:default}
+button.icon{padding:2px 8px;color:var(--mute)}
+input{font:inherit;color:var(--ink);background:var(--card);border:1px solid var(--line);border-radius:6px;padding:5px 8px}
+input:focus{outline:2px solid var(--accent);outline-offset:-1px}
+main{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:20px;padding:20px;max-width:1300px;margin:0 auto}
+@media(max-width:900px){main{grid-template-columns:1fr;padding:16px}}
+section{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:16px}
+.tabs{display:flex;gap:4px;margin-bottom:12px}
+.tabs button{border:0;border-bottom:2px solid transparent;border-radius:0;background:none;padding:6px 12px;color:var(--mute)}
+.tabs button[aria-selected=true]{color:var(--ink);border-color:var(--accent);font-weight:600}
+.hint{color:var(--mute);font-size:12px;margin:0 0 12px}
+.rule{border:1px solid var(--line);border-radius:8px;padding:10px;margin-bottom:10px;display:grid;gap:8px}
+.rule .top{display:flex;gap:6px;align-items:center}
+.rule .num{color:var(--mute);width:18px;text-align:right;font-variant-numeric:tabular-nums}
+.rule .name{flex:1;font-weight:600}
+.chips{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.chip{background:var(--chip);border-radius:999px;padding:2px 4px 2px 10px;display:inline-flex;align-items:center;gap:2px}
+.chip button{border:0;background:none;padding:0 6px;color:var(--mute);font-size:15px;line-height:1}
+.chips input{flex:1;min-width:140px;border-style:dashed}
+.add{width:100%;border-style:dashed;color:var(--mute);padding:8px}
+.row{display:flex;gap:8px;align-items:baseline;padding:6px 8px;border-radius:6px;flex-wrap:wrap}
+.row:nth-child(odd){background:var(--bg)}
+.row .fname{flex:1;min-width:160px;word-break:break-all}
+.badge{font-size:12px;border-radius:999px;padding:1px 8px;white-space:nowrap}
+.badge.ok{background:var(--okbg);color:var(--ok)}
+.badge.warn{background:var(--warnbg);color:var(--warn)}
+.group{font-weight:600;margin:14px 0 4px}
+.group small{color:var(--mute);font-weight:400}
+.test{display:flex;gap:8px;margin-bottom:12px}
+.test input{flex:1}
+.errors{background:var(--errbg);color:var(--err);border-radius:8px;padding:8px 12px;margin:0 0 12px;list-style:none}
+.status{font-size:12px;color:var(--mute)}
+.status.dirty{color:var(--warn)}
+.empty{color:var(--mute);padding:12px 0}
+</style>
+</head>
+<body>
+<header>
+  <h1>규칙 편집</h1>
+  <div class="paths" id="paths"></div>
+  <span class="status" id="status"></span>
+  <button class="primary" id="save" disabled>저장</button>
+</header>
+<main>
+  <section>
+    <div class="tabs" role="tablist" id="tabs"></div>
+    <ul class="errors" id="errors" hidden></ul>
+    <div id="editor"></div>
+  </section>
+  <section>
+    <h2 style="font-size:18px;margin:0 0 4px">분류 미리보기</h2>
+    <p class="hint">편집 중인 규칙(저장 전)으로 소스 폴더의 파일을 분류한 결과입니다.</p>
+    <div class="test"><input id="extra" placeholder="파일명을 넣어 시험해 보기 (예: 20261027_정책삭제_FW-A.xlsx)"><button id="extraAdd">추가</button></div>
+    <div id="preview"></div>
+  </section>
+</main>
+<script>
+const TOKEN = "__TOKEN__";
+const TABS = {
+  tasks:   {label: "작업", entry: true, hint: "파일명에 키워드가 하나라도 있으면 해당 작업으로 분류합니다. 위에 있는 규칙이 먼저 적용됩니다."},
+  targets: {label: "대상", entry: true, hint: "장비명 등 대상을 정의합니다. 위에 있는 규칙이 먼저 적용됩니다."},
+  ignore:  {label: "무시", entry: false, hint: "정리하지 않을 파일명 패턴입니다. * 와 ? 를 쓸 수 있습니다. (예: ~$*, *.tmp)"},
+};
+let state = {tasks: [], targets: [], ignore: []}, tab = "tasks", dirty = false, extras = [], timer;
+const $ = id => document.getElementById(id);
+
+async function api(method, path, body) {
+  const res = await fetch(path, {method, headers: {"X-Token": TOKEN, "Content-Type": "application/json"},
+    body: body && JSON.stringify(body)});
+  return {ok: res.ok, data: await res.json()};
+}
+const draft = () => ({tasks: state.tasks, targets: state.targets, ignore: state.ignore});
+
+function el(tag, props = {}, ...kids) {
+  const e = Object.assign(document.createElement(tag), props);
+  e.append(...kids);
+  return e;
+}
+
+function markDirty() {
+  dirty = true;
+  $("save").disabled = false;
+  $("status").textContent = "저장하지 않은 변경 있음";
+  $("status").className = "status dirty";
+  clearTimeout(timer);
+  timer = setTimeout(refreshPreview, 250);
+}
+
+function chips(list, focusId, onChange) {
+  const box = el("div", {className: "chips"});
+  list.forEach((kw, i) => box.append(el("span", {className: "chip"}, kw,
+    el("button", {title: "삭제", textContent: "×", onclick: () => { list.splice(i, 1); onChange(true); }}))));
+  const input = el("input", {id: focusId, placeholder: list.length ? "키워드 추가 (Enter)" : "키워드 입력 후 Enter"});
+  const commit = () => {
+    const words = input.value.split(",").map(s => s.trim()).filter(s => s && !list.includes(s));
+    input.value = "";
+    if (words.length) { list.push(...words); onChange(true, focusId); }
+  };
+  input.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === ",") { e.preventDefault(); commit(); } });
+  input.addEventListener("blur", commit);
+  box.append(input);
+  return box;
+}
+
+function render(focusId) {
+  const tabs = $("tabs");
+  tabs.replaceChildren(...Object.entries(TABS).map(([key, t]) => el("button", {
+    role: "tab", textContent: `${t.label} ${state[key].length}`,
+    onclick: () => { tab = key; render(); }})));
+  tabs.querySelectorAll("button").forEach((b, i) => b.setAttribute("aria-selected", Object.keys(TABS)[i] === tab));
+
+  const ed = $("editor"), cfg = TABS[tab], list = state[tab];
+  ed.replaceChildren(el("p", {className: "hint", textContent: cfg.hint}));
+  const after = (structural, id) => { markDirty(); if (structural) render(id); };
+
+  if (!cfg.entry) {
+    ed.append(chips(list, "ign", after));
+    ed.append(el("p", {className: "hint", textContent: "분류 불필요로 표시한 파일은 정확한 파일명이 여기에 들어갑니다."}));
+  } else {
+    list.forEach((rule, i) => {
+      const move = d => { list.splice(i + d, 0, list.splice(i, 1)[0]); after(true); };
+      ed.append(el("div", {className: "rule"},
+        el("div", {className: "top"},
+          el("span", {className: "num", textContent: i + 1}),
+          el("input", {className: "name", value: rule.name, placeholder: `${cfg.label}명`, oninput: e => { rule.name = e.target.value; markDirty(); }}),
+          el("button", {className: "icon", title: "위로", textContent: "↑", disabled: i === 0, onclick: () => move(-1)}),
+          el("button", {className: "icon", title: "아래로", textContent: "↓", disabled: i === list.length - 1, onclick: () => move(1)}),
+          el("button", {className: "icon", title: "삭제", textContent: "삭제", onclick: () => {
+            if (!rule.name && !rule.keywords.length || confirm(`'${rule.name || "이름 없음"}' 규칙을 삭제할까요?`)) { list.splice(i, 1); after(true); }
+          }})),
+        chips(rule.keywords, `kw-${tab}-${i}`, after)));
+    });
+    if (!list.length) ed.append(el("div", {className: "empty", textContent: `${cfg.label} 규칙이 없습니다.`}));
+    ed.append(el("button", {className: "add", textContent: `+ ${cfg.label} 추가`, onclick: () => {
+      list.push({name: "", keywords: []}); markDirty(); render(); document.querySelectorAll(".rule .name")[list.length - 1].focus();
+    }}));
+  }
+  if (focusId) $(focusId)?.focus();
+}
+
+function showErrors(errors) {
+  const ul = $("errors");
+  ul.hidden = !errors.length;
+  ul.replaceChildren(...errors.map(e => el("li", {textContent: e})));
+}
+
+async function refreshPreview() {
+  const {ok, data} = await api("POST", "/api/preview", {...draft(), extra: extras});
+  const box = $("preview");
+  if (!ok) { box.replaceChildren(el("div", {className: "empty", textContent: data.errors.join(" ")})); return; }
+  const rows = data.rows, un = rows.filter(r => !r.folder);
+  const frag = [el("div", {className: "hint", textContent: `분류됨 ${rows.length - un.length}개 · 미분류 ${un.length}개`})];
+  if (!rows.length) frag.push(el("div", {className: "empty", textContent: "소스 폴더에 파일이 없습니다."}));
+  const fileRow = r => {
+    const missing = [!r.task && "작업", !r.target && "대상"].filter(Boolean);
+    return el("div", {className: "row"},
+      el("span", {className: "fname", textContent: (r.extra ? "▸ " : "") + r.name}),
+      r.task ? el("span", {className: "badge ok", textContent: r.task}) : "",
+      r.target ? el("span", {className: "badge ok", textContent: r.target}) : "",
+      missing.length ? el("span", {className: "badge warn", textContent: `${missing.join("·")} 없음`}) : "");
+  };
+  if (un.length) {
+    frag.push(el("div", {className: "group", textContent: "미분류"}), ...un.map(fileRow));
+  }
+  let current = null;
+  for (const r of rows.filter(r => r.folder)) {
+    if (r.folder !== current) {
+      current = r.folder;
+      const n = rows.filter(x => x.folder === current).length;
+      frag.push(el("div", {className: "group"}, current, el("small", {textContent: `  ${n}개`})));
+    }
+    frag.push(fileRow(r));
+  }
+  box.replaceChildren(...frag);
+}
+
+async function save() {
+  $("save").disabled = true;
+  const {ok, data} = await api("PUT", "/api/rules", draft());
+  if (!ok) { showErrors(data.errors); $("save").disabled = false; return; }
+  showErrors([]);
+  state = {tasks: data.tasks, targets: data.targets, ignore: data.ignore};
+  dirty = false;
+  $("status").textContent = "저장됨";
+  $("status").className = "status";
+  render();
+  refreshPreview();
+}
+
+$("save").onclick = save;
+$("extraAdd").onclick = () => {
+  const v = $("extra").value.trim();
+  if (v) { extras = [v, ...extras.filter(x => x !== v)].slice(0, 5); $("extra").value = ""; refreshPreview(); }
+};
+$("extra").addEventListener("keydown", e => { if (e.key === "Enter") $("extraAdd").click(); });
+addEventListener("keydown", e => { if ((e.ctrlKey || e.metaKey) && e.key === "s") { e.preventDefault(); if (!$("save").disabled) save(); } });
+addEventListener("beforeunload", e => { if (dirty) e.preventDefault(); });
+
+(async () => {
+  const {data} = await api("GET", "/api/rules");
+  state = {tasks: data.tasks, targets: data.targets, ignore: data.ignore};
+  $("paths").textContent = `${data.file} · 소스 ${data.source_dir} → 결과 ${data.output_dir}`;
+  render();
+  refreshPreview();
+})();
+</script>
+</body>
+</html>

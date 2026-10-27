@@ -1,0 +1,18 @@
+source_dir: "./source"          # 이 파일 위치 기준 상대경로 가능
+output_dir: "./organized"
+date_source: filename           # filename: 파일명 → 수정일 → 오늘 / mtime: 수정일 → 파일명 → 오늘
+date_format: "%Y-%m-%d"
+folder_template: "{date}_{task}_{target}"
+# log_file: "organizer_log.jsonl"  # 기본값: 이 파일 옆
+
+tasks:
+  - name: 정책삭제
+    keywords: ["정책삭제", "삭제대상"]
+  - name: 정책신청
+    keywords: ["정책신청"]
+
+targets:
+  - name: A방화벽
+    keywords: ["A방화벽", "FW-A"]
+
+ignore: ["~$*", "*.tmp"]
